@@ -81,7 +81,6 @@ def checkweb(domain_names):
 def main():
     """Main function of the script.
     """
-    subdomains = []
     if args.domain:
         subdomains = get_censys_report(domain)
         subdomains += get_crt_report(domain)
