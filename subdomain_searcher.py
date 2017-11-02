@@ -72,7 +72,7 @@ def checkweb(domain_names):
             resp = requests.get(url, verify=False, timeout=2)
         except:
             if args.verbose:
-                print('[-]\tUnable to connect to site: {}'.format(domain))
+                print(' [-]\tUnable to connect to site: {}'.format(domain))
             continue
         title = re.findall(r'<title[^>]*>([^<]+)</title>',resp.text, re.IGNORECASE)
         title = str(title).strip("[,],'")
