@@ -2,11 +2,13 @@ import argparse
 import requests
 import re
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
+from selenium import webdriver
 
 __author__ = 'Jake Miller'
 __date__ = '20171019'
 __version__ = '0.01'
 __description__ = 'Accepts a domain name and queries multiple sources to return subdomains.'
+
 
 def get_censys_report(domain):
     """Navigates to the censys site and looks up subdomains.
@@ -26,6 +28,7 @@ def get_censys_report(domain):
         if domain in item:
             subs.append(item)
     return subs
+
     
 def get_crt_report(domain):
     """Navigates to the crt site and looks up subdomains.
@@ -45,6 +48,7 @@ def get_crt_report(domain):
         if domain in item:
             subs.append(item)
     return subs
+
     
 def checkweb(domain_names):
     """Sends a web request to each site in a provided list.
@@ -69,21 +73,33 @@ def checkweb(domain_names):
         if args.verbose:
             print("\n [+]\tChecking {}...".format(url))
         try:
-            resp = requests.get(url, verify=False, timeout=2)
+            resp = requests.get(url, headers=headers, verify=False, timeout=2)
         except:
             if args.verbose:
                 print(' [-]\tUnable to connect to site: {}'.format(domain))
             continue
         title = re.findall(r'<title[^>]*>([^<]+)</title>',resp.text, re.IGNORECASE)
         title = str(title).strip("[,],'")
+        if title == "":
+            print(' [-]\tThe title returned empty. Using browser emulation to get site details...')
+            print('    \tThis could take ~10 seconds...\n')
+            browser = webdriver.PhantomJS()
+            browser.get("https://vpn.rds.cms.hhs.gov/")
+            title = re.findall(r'<title[^>]*>([^<]+)</title>', browser.page_source, re.IGNORECASE)
+            title = str(title).strip("[,],'")
+            browser.close()
+        print(' [+]\tSite: {}'.format(domain))
+        print('    \tResponse Code: {}'.format(resp.status_code))
         try:
-            print('Site: {}\tResponse Code: {}\tTitle: {}'.format(domain, resp.status_code, title))
+            print('    \tTitle: {}'.format(title))
         except UnicodeEncodeError:
-            print('Site: {}\tResponse Code: {}\tTitle: {}'.format(domain, resp.status_code, title.encode('utf-8')))
+            print('    \tTitle: {}'.format(title.encode('utf-8')))
         try:
             file.write('Site: {}\tResponse Code: {}\tTitle: {}\n'.format(domain, resp.status_code, title))
         except UnicodeEncodeError:
             file.write('Site: {}\tResponse Code: {}\tTitle: {}\n'.format(domain, resp.status_code, title.encode('utf-8')))
+
+            
 def main():
     """Main function of the script.
     """
