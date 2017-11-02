@@ -81,8 +81,9 @@ def checkweb(domain_names):
         title = re.findall(r'<title[^>]*>([^<]+)</title>',resp.text, re.IGNORECASE)
         title = str(title).strip("[,],'")
         if title == "":
-            print(' [-]\tThe title returned empty. Using browser emulation to get site details...')
-            print('    \tThis could take ~10 seconds...\n')
+            if args.verbose:
+                print(' [-]\tThe title returned empty. Using browser emulation to get site title...')
+                print('    \tThis could take ~10 seconds...')
             browser = webdriver.PhantomJS()
             browser.get(url)
             title = re.findall(r'<title[^>]*>([^<]+)</title>', browser.page_source, re.IGNORECASE)
@@ -90,10 +91,13 @@ def checkweb(domain_names):
             browser.close()
         print(' [+]\tSite: {}'.format(domain))
         print('    \tResponse Code: {}'.format(resp.status_code))
-        try:
-            print('    \tTitle: {}'.format(title))
-        except UnicodeEncodeError:
-            print('    \tTitle: {}'.format(title.encode('utf-8')))
+        if title == "":
+            print('    \tTitle: Unable to parse title')
+        else:
+            try:
+                print('    \tTitle: {}'.format(title))
+            except UnicodeEncodeError:
+                print('    \tTitle: {}'.format(title.encode('utf-8')))
         try:
             file.write('Site: {}\tResponse Code: {}\tTitle: {}\n'.format(domain, resp.status_code, title))
         except UnicodeEncodeError:
