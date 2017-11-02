@@ -84,7 +84,7 @@ def checkweb(domain_names):
             print(' [-]\tThe title returned empty. Using browser emulation to get site details...')
             print('    \tThis could take ~10 seconds...\n')
             browser = webdriver.PhantomJS()
-            browser.get("url")
+            browser.get(url)
             title = re.findall(r'<title[^>]*>([^<]+)</title>', browser.page_source, re.IGNORECASE)
             title = str(title).strip("[,],'")
             browser.close()
