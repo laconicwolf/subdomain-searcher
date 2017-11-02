@@ -76,7 +76,10 @@ def checkweb(domain_names):
             print('Site: {}\tResponse Code: {}\tTitle: {}'.format(domain, resp.status_code, title))
         except UnicodeEncodeError:
             print('Site: {}\tResponse Code: {}\tTitle: {}'.format(domain, resp.status_code, title.encode('utf-8')))
-        file.write('Site: {}\tResponse Code: {}\tTitle: {}\n'.format(domain, resp.status_code, title))
+        try:
+            file.write('Site: {}\tResponse Code: {}\tTitle: {}\n'.format(domain, resp.status_code, title))
+        except UnicodeEncodeError:
+            file.write('Site: {}\tResponse Code: {}\tTitle: {}\n'.format(domain, resp.status_code, title.encode('utf-8')))
     
 def main():
     """Main function of the script.
