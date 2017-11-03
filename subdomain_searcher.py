@@ -3,6 +3,8 @@ import requests
 import re
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from subdomain_searcher_credfile import credfile
 
 __author__ = 'Jake Miller'
 __date__ = '20171019'
@@ -59,13 +61,15 @@ def checkweb(domain_names):
         code and site title if reachable.
         
     Returns:
-        Nothing.
+        web_ident, non_ident_basic_auth.
     """
     print('\n [+]\tChecking each domain to see if it is accessible...\n')
     if not type(domain_names) == list:
         domain_names = list(domain_names)
     filename = domain_names[0].split(".")[-2] + '_checkweb_out.txt'
     file = open(filename,'a')
+    web_ident = {}
+    non_ident_basic_auth = []
     for domain in domain_names:
         if '*' in domain:
             domain = domain.strip('*')[1:]
@@ -86,8 +90,8 @@ def checkweb(domain_names):
                 print('    \tThis could take ~10 seconds...')
             browser = webdriver.PhantomJS()
             browser.get(url)
-            title = re.findall(r'<title[^>]*>([^<]+)</title>', browser.page_source, re.IGNORECASE)
-            title = str(title).strip("[,],'")
+            WebDriverWait(browser, 2)
+            title = browser.title
             browser.close()
         print(' [+]\tSite: {}'.format(domain))
         print('    \tResponse Code: {}'.format(resp.status_code))
@@ -102,8 +106,42 @@ def checkweb(domain_names):
             file.write('Site: {}\tResponse Code: {}\tTitle: {}\n'.format(domain, resp.status_code, title))
         except UnicodeEncodeError:
             file.write('Site: {}\tResponse Code: {}\tTitle: {}\n'.format(domain, resp.status_code, title.encode('utf-8')))
-
+        if resp.status_code == 401 and title == "":
+            non_ident_basic_auth.append(domain)
+        if str(resp.status_code).startswith('2') or str(resp.status_code).startswith('3') or resp.status_code == 401 and title != "":
+            web_ident[domain] = title
             
+    return web_ident#, non_ident_basic_auth
+
+
+def check_creds(sites):
+    '''Sends a web request attempting to login to each site using 
+    the domain and parameters in a provided dictionary.
+    
+    Args:
+        sites: A dictionary object containing domain login path with
+        parameters and default credentials.
+        
+    Returns:
+        Nothing.
+    '''
+    creds = credfile()
+    for item in sites:
+        if sites[item].lower() in creds:
+            s = requests.Session()
+            site_title = sites[item].lower()
+            data = creds[site_title]
+            post_data = data[1]
+            url = "https://{}{}".format(item, data[0])
+            print('\n [+]\tTrying default credentials on {} at {}.'.format(site_title.title(), url))
+            resp = s.post(url, post_data)
+            
+            print(" [INFO] The application responded with a code of {}.".format(str(resp.status_code)))
+            print(" [INFO] The current URL is {}.".format(resp.url))
+            if resp.url != url:
+                print(' [+]\tPossible successful login due to redirect after login.')
+
+    
 def main():
     """Main function of the script.
     """
@@ -117,10 +155,12 @@ def main():
             if args.outfile:
                 file.write(sub + '\n')
     if args.checkweb and args.domain:
-        checkweb(uniq_subdomains)
+        websites = checkweb(uniq_subdomains)
     if args.checkweb and not args.domain:
         subdomains = open(infile).read().splitlines()
-        checkweb(subdomains)
+        websites = checkweb(subdomains)
+    if args.checkcreds:
+        check_creds(websites)
 
         
 if __name__ == '__main__':
@@ -130,7 +170,7 @@ if __name__ == '__main__':
     parser.add_argument("-i", "--infile", help="specify name of the infile to check for domain name connectivity.")
     parser.add_argument("-o", "--outfile", help="specify name of outfile.")
     parser.add_argument("-cw", "--checkweb", help="check websites and return site info.", action="store_true")
-    parser.add_argument("-cc", "--checkcreds", help="attempts to login with default credentials if website is known. Must be used with --checkweb")
+    parser.add_argument("-cc", "--checkcreds", help="attempts to login with default credentials if website is known. Must be used with --checkweb", action="store_true")
     args = parser.parse_args()
 	
     if not args.domain and not args.infile:
