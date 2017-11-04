@@ -1,13 +1,24 @@
-import argparse
-import requests
-import re
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
-from selenium import webdriver
-from selenium.webdriver.support.ui import WebDriverWait
-from subdomain_searcher_credfile import credfile
+try:
+    import argparse
+    import requests
+    import re
+    from requests.auth import HTTPBasicAuth
+    from requests.auth import HTTPDigestAuth
+    from requests_ntlm import HttpNtlmAuth
+    from requests.packages.urllib3.exceptions import InsecureRequestWarning
+    from selenium import webdriver
+    from selenium.webdriver.support.ui import WebDriverWait
+except ImportError as error:
+    missing_module = str(error).split(' ')[-1]
+    print('\nThis script requires several modules that you may not have.')
+    print('Missing module: {}'.format(missing_module))
+    print('Try running "pip install {}", or do an Internet search for installation instructions.'.format(missing_module.strip("'")))
+    exit()
+    
+
 
 __author__ = 'Jake Miller'
-__date__ = '20171019'
+__date__ = '20171104'
 __version__ = '0.01'
 __description__ = 'Accepts a domain name and queries multiple sources to return subdomains.'
 
@@ -29,6 +40,7 @@ def get_censys_report(domain):
     for item in data:
         if domain in item:
             subs.append(item)
+    
     return subs
 
     
@@ -49,6 +61,7 @@ def get_crt_report(domain):
     for item in data:
         if domain in item:
             subs.append(item)
+    
     return subs
 
     
@@ -88,11 +101,14 @@ def checkweb(domain_names):
             if args.verbose:
                 print(' [-]\tThe title returned empty. Using browser emulation to get site title...')
                 print('    \tThis could take ~10 seconds...')
-            browser = webdriver.PhantomJS()
-            browser.get(url)
-            WebDriverWait(browser, 2)
-            title = browser.title
-            browser.close()
+            try:
+                browser = webdriver.PhantomJS()
+                browser.get(url)
+                WebDriverWait(browser, 2)
+                title = browser.title
+                browser.close()
+            except:
+                pass
         print(' [+]\tSite: {}'.format(domain))
         print('    \tResponse Code: {}'.format(resp.status_code))
         if title == "":
@@ -136,8 +152,8 @@ def check_creds(sites):
             print('\n [+]\tTrying default credentials on {} at {}.'.format(site_title.title(), url))
             resp = s.post(url, post_data)
             
-            print(" [INFO] The application responded with a code of {}.".format(str(resp.status_code)))
-            print(" [INFO] The current URL is {}.".format(resp.url))
+            print(" [+]\tThe application responded with a code of {}.".format(str(resp.status_code)))
+            print(" [+]\tThe current URL is {}.".format(resp.url))
             if resp.url != url:
                 print(' [+]\tPossible successful login due to redirect after login.')
 
@@ -150,8 +166,9 @@ def main():
         subdomains = get_censys_report(domain)
         subdomains += get_crt_report(domain)
         uniq_subdomains = set(subdomains)
+        print("\n [+]\tDomains found for {}:\n".format(domain))
         for sub in uniq_subdomains:
-            print(sub)
+            print("    \t{}".format(sub))
             if args.outfile:
                 file.write(sub + '\n')
     if args.checkweb and args.domain:
@@ -196,7 +213,15 @@ if __name__ == '__main__':
     if args.outfile:		
         outfile = args.outfile
         file = open(outfile,'a')
-    
+        
+    if args.checkcreds:
+        try:
+            from default_credentials import credfile
+        except ImportError:
+            print("\n [-]\tThe -cc (--checkcreds) option requires a file containing default credentials. See example at https://github.com/laconicwolf/subdomain_searcher\n")
+            parser.print_help()
+            exit()
+            
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36'} 
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
     main()
