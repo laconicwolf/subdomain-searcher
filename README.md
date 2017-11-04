@@ -49,23 +49,19 @@ C:\Tools>python subdomain_searcher.py -d github.com -cw
         <snip>
 
  [+]    Checking each domain to see if it is accessible...
-
+ 
  [+]    Site: community.github.com
         Response Code: 200
-        Title: GitHub Sponsorships
-        
+        Title: GitHub Sponsorships       
  [+]    Site: www.github.com
         Response Code: 200
-        Title: The world&#39;s leading software development platform · GitHub', '1clr-code-hosting
-        
+        Title: The world&#39;s leading software development platform · GitHub', '1clr-code-hosting     
  [+]    Site: maintainers.github.com
         Response Code: 200
         Title: Sign in to GitHub · GitHub
-        
  [+]    Site: cla.github.com
         Response Code: 200
         Title: GitHub CLA
-        
  [+]    Site: visualstudio.github.com
         Response Code: 200
         Title: GitHub Extension for Visual Studio
