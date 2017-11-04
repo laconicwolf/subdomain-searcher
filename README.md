@@ -33,6 +33,36 @@ C:\Tools>python subdomain_searcher.py -d github.com
         
         <snip>
 
+To print the list of domains to a file, use the -o (--outfile) option.
+To visit each domain name and grab the title, use the -cw (--checkweb) option:
+
+C:\Tools>python subdomain_searcher.py -d github.com -cw
+
+ [+]    Getting subdomains for github.com from censys.io
+
+
+ [+]    Getting subdomains for github.com from crt.sh
+
+
+ [+]    Domains found for github.com:
+
+        <snip>
+
+ [+]    Checking each domain to see if it is accessible...
+
+ [+]    Site: vpn-ca.iad.github.com
+        Response Code: 200
+        Title: Unable to parse title
+ [+]    Site: community.github.com
+        Response Code: 200
+        Title: GitHub Sponsorships
+ [+]    Site: www.github.com
+        Response Code: 200
+        Title: The world&#39;s leading software development platform · GitHub', '1clr-code-hosting
+ [+]    Site: maintainers.github.com
+        Response Code: 200
+        Title: Sign in to GitHub · GitHub
+
 The script will save the checkweb results to a file by default. A -i (--infile) option is included in case you want to submit a list of domain names to use the checkweb option against. Just do:
 
 python subdomain_searcher.py -i domain_file.txt -cw
