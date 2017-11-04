@@ -16,9 +16,8 @@ except ImportError as error:
     exit()
     
 
-
 __author__ = 'Jake Miller'
-__date__ = '20171104'
+__date__ = '20171019'
 __version__ = '0.01'
 __description__ = 'Accepts a domain name and queries multiple sources to return subdomains.'
 
@@ -40,7 +39,7 @@ def get_censys_report(domain):
     for item in data:
         if domain in item:
             subs.append(item)
-    
+            
     return subs
 
     
@@ -60,8 +59,8 @@ def get_crt_report(domain):
     subs = []
     for item in data:
         if domain in item:
-            subs.append(item)
-    
+            subs.append(item
+            
     return subs
 
     
@@ -216,7 +215,7 @@ if __name__ == '__main__':
         
     if args.checkcreds:
         try:
-            from default_credentials import credfile
+            from default_credentials import form_auth_creds, header_auth_creds
         except ImportError:
             print("\n [-]\tThe -cc (--checkcreds) option requires a file containing default credentials. See example at https://github.com/laconicwolf/subdomain_searcher\n")
             parser.print_help()
