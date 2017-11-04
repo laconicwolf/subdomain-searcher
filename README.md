@@ -14,6 +14,7 @@ The script also uses PhantomJS with the -cw (--checkweb) option for use with sel
 
 Usage:
 Python subdomain_searcher.py –domain domainname.com
+
 C:\Tools>python subdomain_searcher.py -d github.com
 
  [+]    Getting subdomains for github.com from censys.io
@@ -29,44 +30,8 @@ C:\Tools>python subdomain_searcher.py -d github.com
         *.registry.github.com
         id.github.com
         atom-installer.github.com
-        hq.github.com
-        porter.github.com
-   <snip>
-
-To print the list of domains to a file, use the -o (--outfile) option.
-To visit each domain name and grab the title, use the -cw (--checkweb) option:
-
-C:\Tools>python subdomain_searcher.py -d github.com -cw
-
- [+]    Getting subdomains for github.com from censys.io
-
-
- [+]    Getting subdomains for github.com from crt.sh
-
-
- [+]    Domains found for github.com:
-
-        <snip>
-
- [+]    Checking each domain to see if it is accessible...
- 
- [+]    Site: community.github.com
-        Response Code: 200
-        Title: GitHub Sponsorships       
- [+]    Site: www.github.com
-        Response Code: 200
-        Title: The world&#39;s leading software development platform · GitHub', '1clr-code-hosting     
- [+]    Site: maintainers.github.com
-        Response Code: 200
-        Title: Sign in to GitHub · GitHub
- [+]    Site: cla.github.com
-        Response Code: 200
-        Title: GitHub CLA
- [+]    Site: visualstudio.github.com
-        Response Code: 200
-        Title: GitHub Extension for Visual Studio
         
-   <snip>
+        <snip>
 
 The script will save the checkweb results to a file by default. A -i (--infile) option is included in case you want to submit a list of domain names to use the checkweb option against. Just do:
 
