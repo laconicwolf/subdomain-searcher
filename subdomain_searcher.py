@@ -81,7 +81,7 @@ def checkweb(domain_names):
     filename = domain_names[0].split(".")[-2] + '_checkweb_out.txt'
     file = open(filename,'a')
     web_ident = {}
-    non_ident_basic_auth = []
+    non_ident_auth = []
     for domain in domain_names:
         if '*' in domain:
             domain = domain.strip('*')[1:]
@@ -122,39 +122,97 @@ def checkweb(domain_names):
         except UnicodeEncodeError:
             file.write('Site: {}\tResponse Code: {}\tTitle: {}\n'.format(domain, resp.status_code, title.encode('utf-8')))
         if resp.status_code == 401 and title == "":
-            non_ident_basic_auth.append(domain)
+            non_ident_auth.append(url)
         if str(resp.status_code).startswith('2') or str(resp.status_code).startswith('3') or resp.status_code == 401 and title != "":
-            web_ident[domain] = title
+            web_ident[url] = title
             
-    return web_ident#, non_ident_basic_auth
+    return web_ident, non_ident_auth
 
 
-def check_creds(sites):
+def check_creds_auth(sites):
     '''Sends a web request attempting to login to each site using 
-    the domain and parameters in a provided dictionary.
+    the URL in the provided list argument and the imported credentials.
     
     Args:
-        sites: A dictionary object containing domain login path with
-        parameters and default credentials.
+        sites: A list containing the URL to request.
         
     Returns:
         Nothing.
     '''
-    creds = credfile()
+    print('\n [+]\tChecking sites for header authentication...')
+    creds = header_auth_creds()
+    for cred in creds:
+        for k, v in cred.items():
+            username = k
+            password = v
+        for url in sites:
+            s = requests.Session()
+            resp = s.get(url)
+            if 'WWW-Authenticate' in resp.headers:
+                auth_type = resp.headers['WWW-Authenticate']
+                if auth_type == 'NTLM':
+                    print('\n [+]\tTrying default credentials at {} using the following NTLM credentials:.'.format(url))
+                    print("    \t{} : {}".format(username, password))
+                    if not '@' in username:
+                        domain = url.split('.')[-2:]
+                        domain = ".".join(domain)
+                        domain = domain.split(':')[0]
+                        s.auth = HttpNtlmAuth(domain + '\\' + username, password)
+                    else:
+                        s.auth = HttpNtlmAuth(username, password)
+                    resp = s.get(url, verify=False)
+                    print(" [+]\tThe application responded with a code of {}.".format(str(resp.status_code)))
+                    print(" [+]\tThe current URL is {}.".format(resp.url))
+                    if resp.url.strip('/') != url:
+                        print(' [+]\tPossible successful login due to redirect after login.')
+                if auth_type.startswith('Basic'):
+                    print('\n [+]\tTrying default credentials at {} using the following Basic Auth credentials:.'.format(url))
+                    print("    \t{} : {}".format(username, password))
+                    resp = s.get(url, auth=(username, password) ,verify=False)
+                    print(" [+]\tThe application responded with a code of {}.".format(str(resp.status_code)))
+                    print(" [+]\tThe current URL is {}.".format(resp.url))
+                    if resp.url.strip('/') != url:
+                        print(' [+]\tPossible successful login due to redirect after login.')
+                if auth_type == 'Digest':
+                    print('\n [+]\tTrying default credentials at {} using the following Digest credentials:.'.format(url))
+                    resp = s.get(url, auth=HTTPDigestAuth(username, password) ,verify=False)
+                    print(" [+]\tThe application responded with a code of {}.".format(str(resp.status_code)))
+                    print(" [+]\tThe current URL is {}.".format(resp.url))
+                    if resp.url.strip('/') != url:
+                        print(' [+]\tPossible successful login due to redirect after login.')
+                cc_file.write('URL: {}  Response Code: {}  Credentials: {}:{}  End URL: {}\n'.format(url, resp.status_code, username, password, resp.url))
+    
+    
+def check_creds(sites):
+    '''Sends a web request attempting to login to each site using 
+    the url and title in a provided dictionary along with the imported 
+    password dictionary containing the login path and required login 
+    parameters.
+    
+    Args:
+        sites: A dictionary object containing URL and title.
+        
+    Returns:
+        Nothing.
+    '''
+    creds = form_auth_creds()
     for item in sites:
         if sites[item].lower() in creds:
             s = requests.Session()
             site_title = sites[item].lower()
             data = creds[site_title]
-            post_data = data[1]
-            url = "https://{}{}".format(item, data[0])
-            print('\n [+]\tTrying default credentials on {} at {}.'.format(site_title.title(), url))
-            resp = s.post(url, post_data)
-            
-            print(" [+]\tThe application responded with a code of {}.".format(str(resp.status_code)))
-            print(" [+]\tThe current URL is {}.".format(resp.url))
-            if resp.url != url:
-                print(' [+]\tPossible successful login due to redirect after login.')
+            url = "{}{}".format(item, data[0])
+            for i in range(1, len(data)):
+                post_data = data[i]
+                print('\n [+]\tTrying default credentials on {} at {} using the following POST data:.'.format(site_title.title(), url))
+                print("    \t{}".format(post_data))
+                resp = s.post(url, post_data, headers=headers, verify=False)
+                print(" [+]\tThe application responded with a code of {}.".format(str(resp.status_code)))
+                print(" [+]\tThe current URL is {}.".format(resp.url))
+                if resp.url != url:
+                    print(' [+]\tPossible successful login due to redirect after login.')
+                cc_file.write('URL: {}  Response Code: {}  POST data: {}  End URL: {}\n'.format(url, resp.status_code, post_data, resp.url))
+                
 
     
 def main():
@@ -171,12 +229,15 @@ def main():
             if args.outfile:
                 file.write(sub + '\n')
     if args.checkweb and args.domain:
-        websites = checkweb(uniq_subdomains)
+        form_auth_sites, header_auth_sites = checkweb(uniq_subdomains)
     if args.checkweb and not args.domain:
         subdomains = open(infile).read().splitlines()
-        websites = checkweb(subdomains)
+        form_auth_sites, header_auth_sites = checkweb(subdomains)
     if args.checkcreds:
-        check_creds(websites)
+        if form_auth_sites != {}:
+            check_creds(form_auth_sites)
+        if header_auth_sites != []:
+            check_creds_auth(header_auth_sites)
 
         
 if __name__ == '__main__':
@@ -216,6 +277,8 @@ if __name__ == '__main__':
     if args.checkcreds:
         try:
             from default_credentials import form_auth_creds, header_auth_creds
+            check_creds_file = 'checkcreds_out.txt'
+            cc_file = open(check_creds_file,'a')
         except ImportError:
             print("\n [-]\tThe -cc (--checkcreds) option requires a file containing default credentials. See example at https://github.com/laconicwolf/subdomain_searcher\n")
             parser.print_help()
