@@ -6,8 +6,11 @@ This script is an excellent way to map the Internet presence or an organization,
 There is also a an option that is still under development, -cc (--checkcreds), that will attempt guessing default credentials against the sites returned from the checkweb option.
 
 Installation: This script requires a few several modules that you may have to install, including:
+
 requests – pip install requests
+
 requests_ntlm – pip install requests_ntlm
+
 selenium – pip install selenium
 
 The script also uses PhantomJS with the -cw (--checkweb) option for use with selenium for a headless browser experience. It will run without PhantomJS, however the results will be less accurate. I recommend using a package manager (yum, brew, choco, etc.) for installation, as it will install the executable in your PATH.
@@ -51,8 +54,11 @@ C:\Tools>python subdomain_searcher.py -d github.com -cw
  [+]    Checking each domain to see if it is accessible...
 
  [+]    Site: vpn-ca.iad.github.com
+ 
         Response Code: 200
+        
         Title: Unable to parse title
+        
  [+]    Site: community.github.com
         Response Code: 200
         Title: GitHub Sponsorships
