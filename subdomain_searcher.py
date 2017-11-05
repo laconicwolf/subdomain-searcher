@@ -59,7 +59,7 @@ def get_crt_report(domain):
     subs = []
     for item in data:
         if domain in item:
-            subs.append(item
+            subs.append(item)
             
     return subs
 
