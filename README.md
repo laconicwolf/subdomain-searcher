@@ -53,10 +53,8 @@ C:\Tools>python subdomain_searcher.py -d github.com -cw
 
  [+]    Checking each domain to see if it is accessible...
 
- [+]    Site: vpn-ca.iad.github.com
- 
+ [+]    Site: vpn-ca.iad.github.com 
         Response Code: 200
-        
         Title: Unable to parse title
         
  [+]    Site: community.github.com
