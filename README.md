@@ -1,4 +1,4 @@
-# subdomain_searcher
+# subdomain_searcher.py
 This script accepts a domain name and queries two sources (censys.io and crt.sh) to gather subdomains. The script includes an additional option, -cw (--checkweb), which will then sending an web request to each domain enumerated, and will return the HTTP response code as well as the title of the website (if possible). 
 
 This script is an excellent way to map the Internet presence or an organization, and the checkweb option gives you a good idea of some of the web apps that are out there.
