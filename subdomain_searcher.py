@@ -1,289 +1,260 @@
-try:
-    import argparse
-    import requests
-    import re
-    from requests.auth import HTTPBasicAuth
-    from requests.auth import HTTPDigestAuth
-    from requests_ntlm import HttpNtlmAuth
-    from requests.packages.urllib3.exceptions import InsecureRequestWarning
-    from selenium import webdriver
-    from selenium.webdriver.support.ui import WebDriverWait
-except ImportError as error:
-    missing_module = str(error).split(' ')[-1]
-    print('\nThis script requires several modules that you may not have.')
-    print('Missing module: {}'.format(missing_module))
-    print('Try running "pip install {}", or do an Internet search for installation instructions.'.format(missing_module.strip("'")))
-    exit()
-    
+#!/usr/bin/env python3
 
-__author__ = 'Jake Miller'
-__date__ = '20171019'
-__version__ = '0.01'
+__author__ = 'Jake Miller (@LaconicWolf)'
+__date__ = '20180710'
+__version__ = '0.02'
 __description__ = 'Accepts a domain name and queries multiple sources to return subdomains.'
 
+import socket
+import argparse
+import re
+import threading
+from queue import Queue
 
-def get_censys_report(domain):
-    """Navigates to the censys site and looks up subdomains.
-    
-    Args:
-        domain: An domain name to look up subdomains
-        
-    Returns:
-        A list object containing the the subdomains returned from censys.
-    """
-    url = "https://censys.io/certificates/report?q=%28.{}%29+AND+tags.raw%3A+%22unexpired%22&field=parsed.names.raw&max_buckets=".format(domain)
-    print("\n [+]\tGetting subdomains for {} from censys.io\n".format(domain))
-    resp = requests.get(url)
-    data = re.findall(r'names%3A\+%22(.*?)%22', resp.text)
-    subs = []
-    for item in data:
-        if domain in item:
-            subs.append(item)
-            
-    return subs
+try:
+    import requests
+    from requests.packages.urllib3.exceptions import InsecureRequestWarning
+except ImportError as error:
+    missing_module = str(error).split(' ')[-1]
+    print('[*] Missing module: {}'.format(missing_module))
+    print('[*] Try running "pip install {}", or do an Internet search for installation instructions.'.format(
+        missing_module.strip("'")))
+    exit()
 
-    
-def get_crt_report(domain):
-    """Navigates to the crt site and looks up subdomains.
-    
-    Args:
-        domain: An domain name to look up subdomains
-        
-    Returns:
-        A list object containing the the subdomains returned from crt.
-    """
+
+def search_censys(domain):
+    """Returns subdomains scraped from censys.io."""
+    url = "https://censys.io/certificates/_search?q=.{} and tags: unexpired&raw=true".format(domain)
+    try:
+        resp = requests.get(url)
+    except Exception as e:
+        print('[-] Unable to connect to {}. Please check the network \
+        connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
+        return []
+    data = re.findall(r' parsed.names: (.*?)</mark>', resp.text)
+    subs = [item.replace('<mark>', '') for item in data if domain in item]
+    return list(set(subs))
+
+
+def search_crt(domain):
+    """Returns subdomains scraped from crt.sh."""
     url = "https://crt.sh/?q=%25.{}".format(domain)
-    print("\n [+]\tGetting subdomains for {} from crt.sh\n".format(domain))
-    resp = requests.get(url)
+    try:
+        resp = requests.get(url)
+    except Exception as e:
+        print('[-] Unable to connect to {}. Please check the network \
+        connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
+        return []
     data = re.findall(r'<TD>(.*?)</TD>', resp.text)
+    subs = [item for item in data if domain in item]
+    return list(set(subs))
+
+
+def search_dnsdumpster(domain):
+    """Returns subdomains scraped from dnsdumpster.com."""
+    url = "https://dnsdumpster.com/"
+    s = requests.Session()
+    try:
+        resp = s.get(url)
+        csrftoken = resp.cookies['csrftoken']
+        s.headers['referer'] = url
+        resp = s.post(url, {'csrfmiddlewaretoken': csrftoken, 'targetip': domain})
+    except Exception as e:
+        print('[-] Unable to connect to {}. Please check the network \
+        connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
+        return []
+    data = re.findall(r'<td class="col-md-4">(.*?)<br>\n<', resp.text)
+    subs = [item for item in data if domain in item and ' ' not in item]
+    return list(set(subs))
+
+
+def search_virustotal(domain):
+    """Returns subdomains scraped from virustotal.org."""
+    url = "https://www.virustotal.com/en/domain/{}/information/".format(domain)
+    try:
+        resp = requests.get(url)
+    except Exception as e:
+        print('[-] Unable to connect to {}. Please check the network \
+        connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
+        return []
+    data = re.findall(r'<a target="_blank" href="/en/domain/(.*?)/information/">\n', resp.text)
+    subs = [item for item in data if domain in item]
+    return list(set(subs))
+
+
+def search_threatcrowd(domain):
+    """Returns subdomains scraped from threatcrowd.org."""
+    url = "https://www.threatcrowd.org/searchApi/v2/domain/report/?domain={}".format(domain)
+    try:
+        resp = requests.get(url)
+    except Exception as e:
+        print('[-] Unable to connect to {}. Please check the network \
+        connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
+        return []
+    data = resp.json().get('subdomains')
+    if data is None:
+        data = []
+    subs = [item for item in data if domain in item]
+    return list(set(subs))
+
+
+def search_netcraft(domain):
+    """Returns subdomains scraped from netcraft.com."""
+    url = "https://searchdns.netcraft.com/?restriction=site+ends+with&host={}".format(domain)
+    s = requests.Session()
+    s.headers[
+        'User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+        (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36'
+    try:
+        resp = s.get(url)
+    except Exception as e:
+        print('[-] Unable to connect to {}. Please check the network \
+            connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
+        return []
+
     subs = []
-    for item in data:
-        if domain in item:
-            subs.append(item)
-            
-    return subs
 
-    
-def checkweb(domain_names):
-    """Sends a web request to each site in a provided list.
-    
-    Args:
-        domain_names: A list object containing domains to 
-        send HTTP requests to. Will print the HTTP respoonse
-        code and site title if reachable.
-        
-    Returns:
-        web_ident, non_ident_basic_auth.
-    """
-    print('\n [+]\tChecking each domain to see if it is accessible...\n')
-    if not type(domain_names) == list:
-        domain_names = list(domain_names)
-    filename = domain_names[0].split(".")[-2] + '_checkweb_out.txt'
-    file = open(filename,'a')
-    web_ident = {}
-    non_ident_auth = []
-    for domain in domain_names:
-        if '*' in domain:
-            domain = domain.strip('*')[1:]
-        url = "https://{}".format(domain)
-        if args.verbose:
-            print("\n [+]\tChecking {}...".format(url))
-        try:
-            resp = requests.get(url, headers=headers, verify=False, timeout=2)
-        except:
-            if args.verbose:
-                print(' [-]\tUnable to connect to site: {}'.format(domain))
-            continue
-        title = re.findall(r'<title[^>]*>([^<]+)</title>',resp.text, re.IGNORECASE)
-        title = str(title).strip("[,],'")
-        if title == "":
-            if args.verbose:
-                print(' [-]\tThe title returned empty. Using browser emulation to get site title...')
-                print('    \tThis could take ~10 seconds...')
-            try:
-                browser = webdriver.PhantomJS()
-                browser.get(url)
-                WebDriverWait(browser, 2)
-                title = browser.title
-                browser.close()
-            except:
-                pass
-        print(' [+]\tSite: {}'.format(domain))
-        print('    \tResponse Code: {}'.format(resp.status_code))
-        if title == "":
-            print('    \tTitle: Unable to parse title')
+    # Netcraft only shows 20 results at a time.
+    # This is a result counter variable for querystring.
+    i = 21
+
+    # Continuously scrape until 'Next page' is not present.
+    while True:
+        if '"><b>Next page</b></a>' in resp.text:
+            data = re.findall(r'\n<a href="(.*?)" rel="nofollow">', resp.text)
+            subs += [item for item in data if domain in item]
+
+            # The last result must be set in the querystring for
+            # the next url to work. This regex grabs the last
+            # result and strips it to the requirement.
+            last_app = re.findall(r'\n<a href="(.*?)" rel="nofollow">', resp.text)[-1].split('//')[1].strip('/')
+
+            next_url = 'https://searchdns.netcraft.com/?host={}&last={}&from={}&restriction=site ends with&position='.format(
+                domain, last_app, str(i))
+            resp = s.get(next_url)
+
+            # Increment the counter to see the next 20 results
+            i += 20
         else:
-            try:
-                print('    \tTitle: {}'.format(title))
-            except UnicodeEncodeError:
-                print('    \tTitle: {}'.format(title.encode('utf-8')))
+            data = re.findall(r'\n<a href="(.*?)" rel="nofollow">', resp.text)
+            subs += [item for item in data if domain in item]
+            break
+    return list(set(subs))
+
+
+def scan_host(host):
+    """Attempts a TCP connection to a specified host. Updates
+    the global scan_data variable with the hostname and ip address
+    and return if the connection is successful."""
+    global scan_data
+    for port in [80, 443, 8080, 8443]:
         try:
-            file.write('Site: {}\tResponse Code: {}\tTitle: {}\n'.format(domain, resp.status_code, title))
-        except UnicodeEncodeError:
-            file.write('Site: {}\tResponse Code: {}\tTitle: {}\n'.format(domain, resp.status_code, title.encode('utf-8')))
-        if resp.status_code == 401 and title == "":
-            non_ident_auth.append(url)
-        if str(resp.status_code).startswith('2') or str(resp.status_code).startswith('3') or resp.status_code == 401 and title != "":
-            web_ident[url] = title
-            
-    return web_ident, non_ident_auth
+            s = socket.socket()
+            s.settimeout(args.timeout)
+            s.connect((host, port))
+            remote_ip = s.getpeername()[0]
+            # remote_port = s.getpeername()[1]
+            # remote_address = '{}:{}'.format(remote_ip, remote_port)
+            scan_data.append((host, remote_ip))
+            return
+        except:
+            continue
 
 
-def check_creds_auth(sites):
-    '''Sends a web request attempting to login to each site using 
-    the URL in the provided list argument and the imported credentials.
-    
-    Args:
-        sites: A list containing the URL to request.
-        
-    Returns:
-        Nothing.
-    '''
-    print('\n [+]\tChecking sites for header authentication...')
-    creds = header_auth_creds()
-    for cred in creds:
-        for k, v in cred.items():
-            username = k
-            password = v
-        for url in sites:
-            s = requests.Session()
-            resp = s.get(url)
-            if 'WWW-Authenticate' in resp.headers:
-                auth_type = resp.headers['WWW-Authenticate']
-                if auth_type == 'NTLM':
-                    print('\n [+]\tTrying default credentials at {} using the following NTLM credentials:.'.format(url))
-                    print("    \t{} : {}".format(username, password))
-                    if not '@' in username:
-                        domain = url.split('.')[-2:]
-                        domain = ".".join(domain)
-                        domain = domain.split(':')[0]
-                        s.auth = HttpNtlmAuth(domain + '\\' + username, password)
-                    else:
-                        s.auth = HttpNtlmAuth(username, password)
-                    resp = s.get(url, verify=False)
-                    print(" [+]\tThe application responded with a code of {}.".format(str(resp.status_code)))
-                    print(" [+]\tThe current URL is {}.".format(resp.url))
-                    if resp.url.strip('/') != url:
-                        print(' [+]\tPossible successful login due to redirect after login.')
-                if auth_type.startswith('Basic'):
-                    print('\n [+]\tTrying default credentials at {} using the following Basic Auth credentials:.'.format(url))
-                    print("    \t{} : {}".format(username, password))
-                    resp = s.get(url, auth=(username, password) ,verify=False)
-                    print(" [+]\tThe application responded with a code of {}.".format(str(resp.status_code)))
-                    print(" [+]\tThe current URL is {}.".format(resp.url))
-                    if resp.url.strip('/') != url:
-                        print(' [+]\tPossible successful login due to redirect after login.')
-                if auth_type == 'Digest':
-                    print('\n [+]\tTrying default credentials at {} using the following Digest credentials:.'.format(url))
-                    resp = s.get(url, auth=HTTPDigestAuth(username, password) ,verify=False)
-                    print(" [+]\tThe application responded with a code of {}.".format(str(resp.status_code)))
-                    print(" [+]\tThe current URL is {}.".format(resp.url))
-                    if resp.url.strip('/') != url:
-                        print(' [+]\tPossible successful login due to redirect after login.')
-                cc_file.write('URL: {}  Response Code: {}  Credentials: {}:{}  End URL: {}\n'.format(url, resp.status_code, username, password, resp.url))
-    
-    
-def check_creds(sites):
-    '''Sends a web request attempting to login to each site using 
-    the url and title in a provided dictionary along with the imported 
-    password dictionary containing the login path and required login 
-    parameters.
-    
-    Args:
-        sites: A dictionary object containing URL and title.
-        
-    Returns:
-        Nothing.
-    '''
-    creds = form_auth_creds()
-    for item in sites:
-        if sites[item].lower() in creds:
-            s = requests.Session()
-            site_title = sites[item].lower()
-            data = creds[site_title]
-            url = "{}{}".format(item, data[0])
-            for i in range(1, len(data)):
-                post_data = data[i]
-                print('\n [+]\tTrying default credentials on {} at {} using the following POST data:.'.format(site_title.title(), url))
-                print("    \t{}".format(post_data))
-                resp = s.post(url, post_data, headers=headers, verify=False)
-                print(" [+]\tThe application responded with a code of {}.".format(str(resp.status_code)))
-                print(" [+]\tThe current URL is {}.".format(resp.url))
-                if resp.url != url:
-                    print(' [+]\tPossible successful login due to redirect after login.')
-                cc_file.write('URL: {}  Response Code: {}  POST data: {}  End URL: {}\n'.format(url, resp.status_code, post_data, resp.url))
-                
+def process_queue(host_queue):
+    """Processes the list of hosts to be scanned by scan_host"""
+    while True:
+        current_host = host_queue.get()
+        scan_host(current_host)
+        host_queue.task_done()
 
-    
+
 def main():
-    """Main function of the script.
-    """
-    subdomains = []
-    if args.domain:
-        subdomains = get_censys_report(domain)
-        subdomains += get_crt_report(domain)
-        uniq_subdomains = set(subdomains)
-        print("\n [+]\tDomains found for {}:\n".format(domain))
-        for sub in uniq_subdomains:
-            print("    \t{}".format(sub))
-            if args.outfile:
-                file.write(sub + '\n')
-    if args.checkweb and args.domain:
-        form_auth_sites, header_auth_sites = checkweb(uniq_subdomains)
-    if args.checkweb and not args.domain:
-        subdomains = open(infile).read().splitlines()
-        form_auth_sites, header_auth_sites = checkweb(subdomains)
-    if args.checkcreds:
-        if form_auth_sites != {}:
-            check_creds(form_auth_sites)
-        if header_auth_sites != []:
-            check_creds_auth(header_auth_sites)
+    """Main function of the script."""
 
-        
+    fh = open('subdomain_searcher_results.csv', 'a')
+    subdomains = []
+    if args.verbose:
+        print("[*] Getting subdomains for {} from censys.io".format(domain))
+    subdomains = search_censys(domain)
+    if args.verbose:
+        print("[*] Getting subdomains for {} from crt.sh".format(domain))
+    subdomains += search_crt(domain)
+    if args.verbose:
+        print("[*] Getting subdomains for {} from dnsdumpster.com".format(domain))
+    subdomains += search_dnsdumpster(domain)
+    if args.verbose:
+        print("[*] Getting subdomains for {} from virustotal.com".format(domain))
+    subdomains += search_virustotal(domain)
+    if args.verbose:
+        print("[*] Getting subdomains for {} from threatcrowd.org".format(domain))
+    subdomains += search_threatcrowd(domain)
+    if args.verbose:
+        print("[*] Getting subdomains for {} from netcraft.com".format(domain))
+    subdomains += search_netcraft(domain)
+    unique_subdomains = set(subdomains)
+    if args.scan:
+        if args.verbose:
+            print(
+                '[*] Performing scan on {} discovered subdomains to check connectivity'.format(len(unique_subdomains)))
+        host_queue = Queue()
+        for i in range(args.threads):
+            t = threading.Thread(target=process_queue, args=[host_queue])
+            t.daemon = True
+            t.start()
+        for unique_subdomain in unique_subdomains:
+            host_queue.put(unique_subdomain)
+        host_queue.join()
+
+        print("[+] Subdomains found for {}:\n".format(domain))
+        print('{:35}{:35}'.format("SUBDOMAIN", "IP ADDRESS"))
+        for data in scan_data:
+            sub_domain = data[0]
+            sub_domain_address = data[1]
+            fh.write('{},{}\n'.format(sub_domain, sub_domain_address))
+            print('{:35}{:35}'.format(sub_domain, sub_domain_address))
+    else:
+        print("[+] Subdomains found for {}:\n".format(domain))
+        for sub in unique_subdomains:
+            if sub.startswith('http'):
+                continue
+            print(sub)
+            fh.write('{}\n'.format(sub))
+    fh.close()
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
-    parser.add_argument("-d", "--domain", help="specify the domain name to query subdomain for. Example: ./subdomain_searcher.py -d example.com")
-    parser.add_argument("-i", "--infile", help="specify name of the infile to check for domain name connectivity.")
-    parser.add_argument("-o", "--outfile", help="specify name of outfile.")
-    parser.add_argument("-cw", "--checkweb", help="check websites and return site info.", action="store_true")
-    parser.add_argument("-cc", "--checkcreds", help="attempts to login with default credentials if website is known. Must be used with --checkweb", action="store_true")
+    parser.add_argument("-v", "--verbose",
+                        help="Increase output verbosity.",
+                        action="store_true")
+    parser.add_argument("-d", "--domain",
+                        help="Specify the domain name to query subdomain for. \
+                        Example: ./subdomain_searcher.py -d example.com")
+    parser.add_argument("-s", "--scan",
+                        help="Scan the discovered subdomains to check connectivity.",
+                        action="store_true")
+    parser.add_argument("-t", "--threads",
+                        nargs="?",
+                        type=int,
+                        default=20,
+                        help="Specify number of threads (default=20)")
+    parser.add_argument("-to", "--timeout",
+                        nargs="?",
+                        type=int,
+                        default=2,
+                        help="Specify number of seconds until a connection timeout (default=2)")
     args = parser.parse_args()
-	
-    if not args.domain and not args.infile:
-        print('\n [-]\tYou must specify a domain name!\n')
+
+    if not args.domain:
         parser.print_help()
+        print('\n[-] You must specify a domain name!\n')
         exit()
     else:
         domain = args.domain
-    
-    if args.infile and not args.checkweb:
-        print("\n [-]\tOnly use an infile if you want to check connectivity to those domain names (the --checkweb option)\n")
-        parser.print_help()
-        exit()
-    
-    if args.checkcreds and not args.checkweb:
-        print('\n [-]\tYou must specify also --checkweb to use --checkcreds!\n')
-        parser.print_help()
-        exit()
-    
-    if args.infile:
-        infile = args.infile
-    
-    if args.outfile:		
-        outfile = args.outfile
-        file = open(outfile,'a')
-        
-    if args.checkcreds:
-        try:
-            from default_credentials import form_auth_creds, header_auth_creds
-            check_creds_file = 'checkcreds_out.txt'
-            cc_file = open(check_creds_file,'a')
-        except ImportError:
-            print("\n [-]\tThe -cc (--checkcreds) option requires a file containing default credentials. See example at https://github.com/laconicwolf/subdomain_searcher\n")
-            parser.print_help()
-            exit()
-            
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36'} 
+
+    # Suppress SSL warnings in the terminal
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
+    scan_data = []
     main()
