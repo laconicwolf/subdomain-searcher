@@ -10,7 +10,6 @@ import argparse
 import re
 import threading
 from queue import Queue
-
 try:
     import requests
     from requests.packages.urllib3.exceptions import InsecureRequestWarning
@@ -28,8 +27,7 @@ def search_censys(domain):
     try:
         resp = requests.get(url)
     except Exception as e:
-        print('[-] Unable to connect to {}. Please check the network \
-        connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
+        print('[-] Unable to connect to {}. Please check the network connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
         return []
     data = re.findall(r' parsed.names: (.*?)</mark>', resp.text)
     subs = [item.replace('<mark>', '') for item in data if domain in item]
@@ -42,8 +40,7 @@ def search_crt(domain):
     try:
         resp = requests.get(url)
     except Exception as e:
-        print('[-] Unable to connect to {}. Please check the network \
-        connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
+        print('[-] Unable to connect to {}. Please check the network connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
         return []
     data = re.findall(r'<TD>(.*?)</TD>', resp.text)
     subs = [item for item in data if domain in item]
@@ -60,8 +57,7 @@ def search_dnsdumpster(domain):
         s.headers['referer'] = url
         resp = s.post(url, {'csrfmiddlewaretoken': csrftoken, 'targetip': domain})
     except Exception as e:
-        print('[-] Unable to connect to {}. Please check the network \
-        connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
+        print('[-] Unable to connect to {}. Please check the network connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
         return []
     data = re.findall(r'<td class="col-md-4">(.*?)<br>\n<', resp.text)
     subs = [item for item in data if domain in item and ' ' not in item]
@@ -74,8 +70,7 @@ def search_virustotal(domain):
     try:
         resp = requests.get(url)
     except Exception as e:
-        print('[-] Unable to connect to {}. Please check the network \
-        connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
+        print('[-] Unable to connect to {}. Please check the network connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
         return []
     data = re.findall(r'<a target="_blank" href="/en/domain/(.*?)/information/">\n', resp.text)
     subs = [item for item in data if domain in item]
@@ -88,8 +83,7 @@ def search_threatcrowd(domain):
     try:
         resp = requests.get(url)
     except Exception as e:
-        print('[-] Unable to connect to {}. Please check the network \
-        connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
+        print('[-] Unable to connect to {}. Please check the network connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
         return []
     data = resp.json().get('subdomains')
     if data is None:
@@ -103,13 +97,11 @@ def search_netcraft(domain):
     url = "https://searchdns.netcraft.com/?restriction=site+ends+with&host={}".format(domain)
     s = requests.Session()
     s.headers[
-        'User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
-        (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36'
+        'User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36'
     try:
         resp = s.get(url)
     except Exception as e:
-        print('[-] Unable to connect to {}. Please check the network \
-            connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
+        print('[-] Unable to connect to {}. Please check the network connection, or manually verify the URL is still valid. Error: {}'.format(url, e))
         return []
 
     subs = []
@@ -229,8 +221,7 @@ if __name__ == '__main__':
                         help="Increase output verbosity.",
                         action="store_true")
     parser.add_argument("-d", "--domain",
-                        help="Specify the domain name to query subdomain for. \
-                        Example: ./subdomain_searcher.py -d example.com")
+                        help="Specify the domain name to query subdomain for. Example: ./subdomain_searcher.py -d example.com")
     parser.add_argument("-s", "--scan",
                         help="Scan the discovered subdomains to check connectivity.",
                         action="store_true")
