@@ -23,7 +23,7 @@ except ImportError as error:
 
 def search_censys(domain):
     """Returns subdomains scraped from censys.io."""
-    url = "https://censys.io/certificates/_search?q=.{} and tags: unexpired&raw=true".format(domain)
+    url = "https://censys.io/certificates/_search?q=.{}%20and%20tags:%20unexpired&raw=true".format(domain)
     try:
         resp = requests.get(url)
     except Exception as e:
