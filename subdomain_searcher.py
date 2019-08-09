@@ -163,28 +163,30 @@ def process_queue(host_queue):
 
 def main():
     """Main function of the script."""
-
-    fh = open('subdomain_searcher_results.csv', 'a')
-    subdomains = []
-    if args.verbose:
-        print("[*] Getting subdomains for {} from censys.io".format(domain))
-    subdomains = search_censys(domain)
-    if args.verbose:
-        print("[*] Getting subdomains for {} from crt.sh".format(domain))
-    subdomains += search_crt(domain)
-    if args.verbose:
-        print("[*] Getting subdomains for {} from dnsdumpster.com".format(domain))
-    subdomains += search_dnsdumpster(domain)
-    if args.verbose:
-        print("[*] Getting subdomains for {} from virustotal.com".format(domain))
-    subdomains += search_virustotal(domain)
-    if args.verbose:
-        print("[*] Getting subdomains for {} from threatcrowd.org".format(domain))
-    subdomains += search_threatcrowd(domain)
-    if args.verbose:
-        print("[*] Getting subdomains for {} from netcraft.com".format(domain))
-    subdomains += search_netcraft(domain)
-    unique_subdomains = set(subdomains)
+    all_subdomains = []
+    for domain in domains:
+        subdomains = []
+        if args.verbose:
+            print("[*] Getting subdomains for {} from censys.io".format(domain))
+        subdomains = search_censys(domain)
+        if args.verbose:
+            print("[*] Getting subdomains for {} from crt.sh".format(domain))
+        subdomains += search_crt(domain)
+        if args.verbose:
+            print("[*] Getting subdomains for {} from dnsdumpster.com".format(domain))
+        subdomains += search_dnsdumpster(domain)
+        if args.verbose:
+            print("[*] Getting subdomains for {} from virustotal.com".format(domain))
+        subdomains += search_virustotal(domain)
+        if args.verbose:
+            print("[*] Getting subdomains for {} from threatcrowd.org".format(domain))
+        subdomains += search_threatcrowd(domain)
+        if args.verbose:
+            print("[*] Getting subdomains for {} from netcraft.com".format(domain))
+        subdomains += search_netcraft(domain)
+        subdomains = set(subdomains)
+        all_subdomains += subdomains
+    unique_subdomains = set(all_subdomains)
     if args.scan:
         if args.verbose:
             print(
@@ -200,49 +202,62 @@ def main():
 
         print("[+] Subdomains found for {}:\n".format(domain))
         print('{:35}{:35}'.format("SUBDOMAIN", "IP ADDRESS"))
-        for data in scan_data:
-            sub_domain = data[0]
-            sub_domain_address = data[1]
-            fh.write('{},{}\n'.format(sub_domain, sub_domain_address))
-            print('{:35}{:35}'.format(sub_domain, sub_domain_address))
+        with open('subdomain_searcher_results.csv', 'w') as fh:
+            for data in scan_data:
+                sub_domain = data[0]
+                sub_domain_address = data[1]
+                fh.write('{},{}\n'.format(sub_domain, sub_domain_address))
+                print('{:35}{:35}'.format(sub_domain, sub_domain_address))
     else:
         print("[+] Subdomains found for {}:\n".format(domain))
-        for sub in unique_subdomains:
-            if sub.startswith('http'):
-                continue
-            print(sub)
-            fh.write('{}\n'.format(sub))
-    fh.close()
+        with open('subdomain_searcher_results.csv', 'w') as fh:
+            for sub in unique_subdomains:
+                if sub.startswith('http'):
+                    continue
+                print(sub)
+                fh.write('{}\n'.format(sub))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-v", "--verbose",
-                        help="Increase output verbosity.",
-                        action="store_true")
-    parser.add_argument("-d", "--domain",
-                        help="Specify the domain name to query subdomain for. Example: ./subdomain_searcher.py -d example.com")
-    parser.add_argument("-s", "--scan",
-                        help="Scan the discovered subdomains to check connectivity.",
-                        action="store_true")
-    parser.add_argument("-t", "--threads",
-                        nargs="?",
-                        type=int,
-                        default=20,
-                        help="Specify number of threads (default=20)")
-    parser.add_argument("-to", "--timeout",
-                        nargs="?",
-                        type=int,
-                        default=2,
-                        help="Specify number of seconds until a connection timeout (default=2)")
+    parser.add_argument(
+        "-v", "--verbose",
+        help="Increase output verbosity.",
+        action="store_true"
+    )
+    parser.add_argument(
+        "-d", "--domain",
+        nargs='+',
+        help=("Specify the domain name(s) to query subdomain for. ",
+              "Example: ./subdomain_searcher.py -d example.com")
+    )
+    parser.add_argument(
+        "-s", "--scan",
+        help="Scan the discovered subdomains to check connectivity.",
+        action="store_true"
+    )
+    parser.add_argument(
+        "-t", "--threads",
+        nargs="?",
+        type=int,
+        default=20,
+        help="Specify number of threads (default=20)"
+    )
+    parser.add_argument(
+        "-to", "--timeout",
+        nargs="?",
+        type=int,
+        default=.2,
+        help="Specify number of seconds until a connection timeout (default=.2)"
+    )
     args = parser.parse_args()
 
     if not args.domain:
         parser.print_help()
-        print('\n[-] You must specify a domain name!\n')
+        print('[-] You must specify a domain name (-d a.com a.net a.org)')
         exit()
     else:
-        domain = args.domain
+        domains = args.domain
 
     # Suppress SSL warnings in the terminal
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
